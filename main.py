@@ -6,12 +6,16 @@ import requests
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 import threading
 
+# 配置文件目录
+import config
+
 lock = threading.Lock()
 # 线程池
-pool = ThreadPoolExecutor(max_workers=24)
+pool = ThreadPoolExecutor(max_workers=config.max_workers)
 
-filename = "mapbox-terrain"
-token = "pk.eyJ1IjoiZXhhbXBsZXMiLCJhIjoiY2p0MG01MXRqMW45cjQzb2R6b2ptc3J4MSJ9.zA2W0IkI0c6KaAhJfk9bWg"
+pat = config.pat
+filename = config.filename
+token = config.token
 URL = "https://a.tiles.mapbox.com/v4/mapbox.terrain-rgb/{z}/{x}/{y}.png?access_token=" + token
 
 headers = {
@@ -22,7 +26,7 @@ headers = {
 }
 
 numOK = 0
-allsize = 0
+allsize = 1
 
 
 def _download(z, x, y, filename, errorlen=50):
@@ -33,23 +37,32 @@ def _download(z, x, y, filename, errorlen=50):
     :param x:
     :param y:
     :param filename: 文件夹名称
-    :param errorlen: 错误长度。无数据
+    :param errorlen: 错误长度。认为返回小于50个字节就是错误数据。（Mapbox 的 forbidden），纯空白数据时为 800 个字节左右
     :return:
     """
-    url = URL
-    path = './tiles/%s/%i/%i' % (filename, z, x)
-    map_url = url.format(x=x, y=y, z=z)
+    path = '%s/%s/%i/%i' % (pat, filename, z, x)
 
+    # 文件夹不存在时创建
+    if not os.path.isdir(path):
+        os.makedirs(path)
+    file = '%s/%i.png' % (path, y)
+
+    # 文件存在时跳过
+    if os.path.exists(file):
+        with lock:
+            numOK += 1
+        return
+
+    # 文件不存在开始下载
+    url = URL
+    map_url = url.format(x=x, y=y, z=z)
     r = requests.get(map_url, headers=headers)
 
     if (r.content.__len__() < errorlen):
         with lock:
             numOK += 1
         return
-
-    if not os.path.isdir(path):
-        os.makedirs(path)
-    with open('%s/%i.png' % (path, y), 'wb') as f:
+    with open(file, 'wb') as f:
         with lock:
             numOK += 1
 
@@ -81,14 +94,14 @@ def timerfun():
         time.sleep(1)
         persec = numOK - last + 1
         rest = allsize - numOK
-        print(persec, "每秒; 剩余", rest, "预计需要", rest/persec,"秒")
+        print(persec, "每秒; 剩余", rest, "预计还需要", rest/persec,"秒", numOK/(allsize+1)*100, "%")
         last = numOK
         if (allsize == numOK):
             return
 
 
 if __name__ == '__main__':
-    zoom = 1
+    zoom = config.zoom
     downloadZ(zoom)
     th = threading.Thread(target=timerfun)
     th.start()
