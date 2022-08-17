@@ -16,7 +16,7 @@ pool = ThreadPoolExecutor(max_workers=config.max_workers)
 pat = config.pat
 filename = config.filename
 token = config.token
-URL = "https://a.tiles.mapbox.com/v4/mapbox.terrain-rgb/{z}/{x}/{y}.png?access_token=" + token
+URL = config.url
 
 headers = {
     'Host': 'a.tiles.mapbox.com',
